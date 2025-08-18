@@ -1,4 +1,3 @@
-// server.js
 import express from "express";
 import fetch from "node-fetch";
 import sharp from "sharp";
@@ -6,68 +5,58 @@ import sharp from "sharp";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// avatar from UUID
+// Helper: strip dashes if someone pastes Mojang-style UUID
+function cleanUUID(uuid) {
+  return uuid.replace(/-/g, "");
+}
+
 app.get("/avatar/:uuid.png", async (req, res) => {
-  const uuid = req.params.uuid;
-
   try {
-    const profileUrl = `https://littleskin.cn/api/yggdrasil/sessionserver/session/minecraft/profile/${uuid}`;
-    const response = await fetch(profileUrl);
-    if (!response.ok) throw new Error("Profile not found");
+    const uuid = cleanUUID(req.params.uuid);
 
-    const profile = await response.json();
-
-    const texturesProperty = profile.properties.find((p) => p.name === "textures");
-    if (!texturesProperty) throw new Error("No textures found");
-
-    const textures = JSON.parse(
-      Buffer.from(texturesProperty.value, "base64").toString("utf-8")
+    // hit LittleSkin sessionserver
+    const resp = await fetch(
+      `https://littleskin.cn/api/yggdrasil/sessionserver/session/minecraft/profile/${uuid}`
     );
+
+    if (!resp.ok) {
+      return res.status(404).send("Profile not found");
+    }
+
+    const data = await resp.json();
+
+    // grab textures field
+    const texturesProperty = data.properties.find((p) => p.name === "textures");
+    if (!texturesProperty) {
+      return res.status(404).send("No textures found");
+    }
+
+    // decode base64
+    const textures = JSON.parse(
+      Buffer.from(texturesProperty.value, "base64").toString("utf8")
+    );
+
     const skinUrl = textures.textures.SKIN.url;
 
-    const skinResponse = await fetch(skinUrl);
-    const skinBuffer = Buffer.from(await skinResponse.arrayBuffer());
+    // fetch actual skin png
+    const skinResp = await fetch(skinUrl);
+    const skinBuffer = Buffer.from(await skinResp.arrayBuffer());
 
-    // crop the face 8x8 from (8,8)
-    const avatar = await sharp(skinBuffer)
+    // crop 8x8 head from 64x64 skin → upscale to 256x256
+    const head = await sharp(skinBuffer)
       .extract({ left: 8, top: 8, width: 8, height: 8 })
-      .resize(64, 64, { kernel: "nearest" })
+      .resize(256, 256, { kernel: "nearest" })
       .png()
       .toBuffer();
 
     res.set("Content-Type", "image/png");
-    res.send(avatar);
+    res.send(head);
   } catch (err) {
-    res.status(404).json({ error: err.message });
-  }
-});
-
-// avatar from username
-app.get("/avatar/playername/:username.png", async (req, res) => {
-  const username = req.params.username;
-
-  try {
-    const skinUrl = `https://littleskin.cn/skin/${username}.png`;
-
-    const skinResponse = await fetch(skinUrl);
-    if (!skinResponse.ok) throw new Error("Player skin not found");
-
-    const skinBuffer = Buffer.from(await skinResponse.arrayBuffer());
-
-    // crop the face 8x8 from (8,8)
-    const avatar = await sharp(skinBuffer)
-      .extract({ left: 8, top: 8, width: 8, height: 8 })
-      .resize(64, 64, { kernel: "nearest" })
-      .png()
-      .toBuffer();
-
-    res.set("Content-Type", "image/png");
-    res.send(avatar);
-  } catch (err) {
-    res.status(404).json({ error: err.message });
+    console.error(err);
+    res.status(500).send("Server error");
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ LittleAvatar running on port ${PORT}`);
+  console.log(`LittleAvatar API running at http://localhost:${PORT}`);
 });
