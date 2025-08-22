@@ -1,12 +1,13 @@
 import express from "express";
 import fetch from "node-fetch";
 import sharp from "sharp";
-import cors from "cors"; // ✅ import cors
+import cors from "cors";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors()); // ✅ enable CORS for all routes
+// Enable CORS
+app.use(cors());
 
 // Helper: strip dashes if someone pastes Mojang-style UUID
 function cleanUUID(uuid) {
@@ -42,30 +43,27 @@ app.get("/avatar/:uuid.png", async (req, res) => {
       `https://littleskin.cn/api/yggdrasil/sessionserver/session/minecraft/profile/${uuid}`
     );
 
-    if (!resp.ok) {
-      return res.status(404).send("Profile not found");
-    }
+    if (!resp.ok) return res.status(404).send("Profile not found");
 
     const data = await resp.json();
     const texturesProperty = data.properties.find((p) => p.name === "textures");
-    if (!texturesProperty) {
-      return res.status(404).send("No textures found");
-    }
+    if (!texturesProperty) return res.status(404).send("No textures found");
 
     const textures = JSON.parse(
       Buffer.from(texturesProperty.value, "base64").toString("utf8")
     );
+
     const skinUrl = textures.textures?.SKIN?.url;
-    if (!skinUrl) {
-      return res.status(404).send("Skin not found");
-    }
+    if (!skinUrl) return res.status(404).send("Skin not found");
 
     const skinResp = await fetch(skinUrl);
     const skinBuffer = Buffer.from(await skinResp.arrayBuffer());
 
     const avatar = await renderAvatar(skinBuffer);
 
+    // ✅ Force download
     res.set("Content-Type", "image/png");
+    res.set("Content-Disposition", `attachment; filename="${uuid}.png"`);
     res.send(avatar);
   } catch (err) {
     console.error(err);
@@ -73,20 +71,20 @@ app.get("/avatar/:uuid.png", async (req, res) => {
   }
 });
 
-// ===== Username endpoint =====
+// ===== Playername endpoint =====
 app.get("/avatar/playername/:name.png", async (req, res) => {
   try {
     const { name } = req.params;
 
     const skinResp = await fetch(`https://littleskin.cn/skin/${name}.png`);
-    if (!skinResp.ok) {
-      return res.status(404).json({ error: "Player not found" });
-    }
+    if (!skinResp.ok) return res.status(404).json({ error: "Player not found" });
 
     const skinBuffer = Buffer.from(await skinResp.arrayBuffer());
     const avatar = await renderAvatar(skinBuffer);
 
+    // ✅ Force download
     res.set("Content-Type", "image/png");
+    res.set("Content-Disposition", `attachment; filename="${name}.png"`);
     res.send(avatar);
   } catch (err) {
     console.error(err);
