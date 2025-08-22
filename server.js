@@ -1,9 +1,12 @@
 import express from "express";
 import fetch from "node-fetch";
 import sharp from "sharp";
+import cors from "cors"; // ✅ import cors
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.use(cors()); // ✅ enable CORS for all routes
 
 // Helper: strip dashes if someone pastes Mojang-style UUID
 function cleanUUID(uuid) {
@@ -12,14 +15,12 @@ function cleanUUID(uuid) {
 
 // Helper: render full face (base + overlay)
 async function renderAvatar(skinBuffer) {
-  // base face
   const baseFace = await sharp(skinBuffer)
     .extract({ left: 8, top: 8, width: 8, height: 8 })
     .resize(256, 256, { kernel: "nearest" })
     .png()
     .toBuffer();
 
-  // overlay face (hat layer)
   const overlayFace = await sharp(skinBuffer)
     .extract({ left: 40, top: 8, width: 8, height: 8 })
     .resize(256, 256, { kernel: "nearest" })
@@ -62,7 +63,6 @@ app.get("/avatar/:uuid.png", async (req, res) => {
     const skinResp = await fetch(skinUrl);
     const skinBuffer = Buffer.from(await skinResp.arrayBuffer());
 
-    // render full avatar
     const avatar = await renderAvatar(skinBuffer);
 
     res.set("Content-Type", "image/png");
