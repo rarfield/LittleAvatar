@@ -38,11 +38,11 @@ async function renderAvatar(skinBuffer) {
 app.get("/avatar/:uuid.png", async (req, res) => {
   try {
     const uuid = cleanUUID(req.params.uuid);
+    const download = req.query.download !== undefined; // check ?download
 
     const resp = await fetch(
       `https://littleskin.cn/api/yggdrasil/sessionserver/session/minecraft/profile/${uuid}`
     );
-
     if (!resp.ok) return res.status(404).send("Profile not found");
 
     const data = await resp.json();
@@ -52,7 +52,6 @@ app.get("/avatar/:uuid.png", async (req, res) => {
     const textures = JSON.parse(
       Buffer.from(texturesProperty.value, "base64").toString("utf8")
     );
-
     const skinUrl = textures.textures?.SKIN?.url;
     if (!skinUrl) return res.status(404).send("Skin not found");
 
@@ -61,9 +60,10 @@ app.get("/avatar/:uuid.png", async (req, res) => {
 
     const avatar = await renderAvatar(skinBuffer);
 
-    // ✅ Force download
     res.set("Content-Type", "image/png");
-    res.set("Content-Disposition", `attachment; filename="${uuid}.png"`);
+    if (download) {
+      res.set("Content-Disposition", `attachment; filename="${uuid}.png"`);
+    }
     res.send(avatar);
   } catch (err) {
     console.error(err);
@@ -75,6 +75,7 @@ app.get("/avatar/:uuid.png", async (req, res) => {
 app.get("/avatar/playername/:name.png", async (req, res) => {
   try {
     const { name } = req.params;
+    const download = req.query.download !== undefined; // check ?download
 
     const skinResp = await fetch(`https://littleskin.cn/skin/${name}.png`);
     if (!skinResp.ok) return res.status(404).json({ error: "Player not found" });
@@ -82,9 +83,10 @@ app.get("/avatar/playername/:name.png", async (req, res) => {
     const skinBuffer = Buffer.from(await skinResp.arrayBuffer());
     const avatar = await renderAvatar(skinBuffer);
 
-    // ✅ Force download
     res.set("Content-Type", "image/png");
-    res.set("Content-Disposition", `attachment; filename="${name}.png"`);
+    if (download) {
+      res.set("Content-Disposition", `attachment; filename="${name}.png"`);
+    }
     res.send(avatar);
   } catch (err) {
     console.error(err);
