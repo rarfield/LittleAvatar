@@ -10,19 +10,19 @@ function cleanUUID(uuid) {
   return uuid.replace(/-/g, "");
 }
 
-// Helper: render full face (base + overlay)
-async function renderAvatar(skinBuffer) {
+// Helper: render full face (base + overlay) with custom size
+async function renderAvatar(skinBuffer, size = 256) {
   // base face
   const baseFace = await sharp(skinBuffer)
     .extract({ left: 8, top: 8, width: 8, height: 8 })
-    .resize(256, 256, { kernel: "nearest" })
+    .resize(size, size, { kernel: "nearest" })
     .png()
     .toBuffer();
 
   // overlay face (hat layer)
   const overlayFace = await sharp(skinBuffer)
     .extract({ left: 40, top: 8, width: 8, height: 8 })
-    .resize(256, 256, { kernel: "nearest" })
+    .resize(size, size, { kernel: "nearest" })
     .png()
     .toBuffer();
 
@@ -36,6 +36,9 @@ async function renderAvatar(skinBuffer) {
 app.get("/avatar/:uuid.png", async (req, res) => {
   try {
     const uuid = cleanUUID(req.params.uuid);
+
+    // parse ?res= param, default 256
+    const size = Math.min(Math.max(parseInt(req.query.res) || 256, 8), 4096);
 
     const resp = await fetch(
       `https://littleskin.cn/api/yggdrasil/sessionserver/session/minecraft/profile/${uuid}`
@@ -62,13 +65,12 @@ app.get("/avatar/:uuid.png", async (req, res) => {
     const skinResp = await fetch(skinUrl);
     const skinBuffer = Buffer.from(await skinResp.arrayBuffer());
 
-    const avatar = await renderAvatar(skinBuffer);
+    const avatar = await renderAvatar(skinBuffer, size);
 
-    // 🔥 If ?download → trigger download
     if (req.query.download !== undefined) {
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${uuid}.png"`
+        `attachment; filename="${uuid}_${size}.png"`
       );
     }
 
@@ -80,10 +82,13 @@ app.get("/avatar/:uuid.png", async (req, res) => {
   }
 });
 
-// ===== Username endpoint (fresh, uncached) =====
+// ===== Username endpoint =====
 app.get("/avatar/playername/:name.png", async (req, res) => {
   try {
     const { name } = req.params;
+
+    // parse ?res= param, default 256
+    const size = Math.min(Math.max(parseInt(req.query.res) || 256, 8), 4096);
 
     // Step 1: Lookup UUID by username
     const uuidResp = await fetch(
@@ -106,7 +111,7 @@ app.get("/avatar/playername/:name.png", async (req, res) => {
 
     const uuid = uuidData[0].id;
 
-    // Step 2: Use same sessionserver logic as UUID route
+    // Step 2: Get profile & textures
     const resp = await fetch(
       `https://littleskin.cn/api/yggdrasil/sessionserver/session/minecraft/profile/${uuid}`
     );
@@ -124,7 +129,6 @@ app.get("/avatar/playername/:name.png", async (req, res) => {
     const textures = JSON.parse(
       Buffer.from(texturesProperty.value, "base64").toString("utf8")
     );
-
     const skinUrl = textures.textures?.SKIN?.url;
     if (!skinUrl) {
       return res.status(404).json({ error: "Skin not found" });
@@ -133,13 +137,12 @@ app.get("/avatar/playername/:name.png", async (req, res) => {
     const skinResp = await fetch(skinUrl);
     const skinBuffer = Buffer.from(await skinResp.arrayBuffer());
 
-    const avatar = await renderAvatar(skinBuffer);
+    const avatar = await renderAvatar(skinBuffer, size);
 
-    // 🔥 If ?download → trigger download
     if (req.query.download !== undefined) {
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${name}.png"`
+        `attachment; filename="${name}_${size}.png"`
       );
     }
 
