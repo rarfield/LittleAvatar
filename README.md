@@ -115,4 +115,4 @@ MIT — free to use, modify, and distribute.
 
 ---
 
-Made with ❤️ for Minecraft community
+Made with ❤️ for LittleSkin community
